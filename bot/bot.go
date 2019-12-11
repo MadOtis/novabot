@@ -11,7 +11,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-const userMarker = "@"
+const userMarker = "<@!"
 
 var botID string
 var goBot *discordgo.Session
@@ -76,7 +76,12 @@ func messageHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 			userSpecified := strings.TrimSpace(strings.TrimPrefix(command, "ships"))
 			if len(userSpecified) > 0 {
 				if strings.HasPrefix(userSpecified, userMarker) {
-					userSpecified = strings.TrimPrefix(userSpecified, userMarker)
+					userSpecified = strings.TrimSuffix(strings.TrimPrefix(userSpecified, userMarker), ">")
+					discordUser, err := s.User(userSpecified)
+					if err != nil {
+						panic("User unknown")
+					}
+					userSpecified = discordUser.Username
 				}
 			} else {
 				userSpecified = m.Author.Username
@@ -100,13 +105,15 @@ func buildHelpMessage() string {
 }
 
 func buildShipList(userSpecified string) string {
-	dbrows, err := DB.Query("select s.name, s.nickname, s.crewsize from ships s, ownedships os, users u where s.id = os.shipid and os.userid = u.userid and u.handle = ?", userSpecified)
+	dbrows, err := DB.Query("select s.name, s.nickname, s.crewsize from ships s, ownedShips os, users u where s.id = os.shipid and os.userid = u.userid and u.handle = ?", userSpecified)
 	if err != nil {
 		panic(err.Error())
 	}
 	defer dbrows.Close()
 
 	var resultMessage string
+	var bFoundShips = false
+
 	resultMessage = "Ship | Nickname | Crew size\n"
 
 	for dbrows.Next() {
@@ -116,6 +123,10 @@ func buildShipList(userSpecified string) string {
 			panic(err.Error())
 		}
 		resultMessage = resultMessage + shipname + "\t" + shipnickname + "\t" + crewsize + "\n"
+		bFoundShips = true
+	}
+	if !bFoundShips {
+		resultMessage = "No ships for you!"
 	}
 	return resultMessage
 }
