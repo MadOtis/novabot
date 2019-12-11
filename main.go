@@ -1,19 +1,23 @@
 package main
 
 import (
+	"os"
+
 	"github.com/madotis/novabot/bot"
-	"github.com/madotis/novabot/config"
 )
 
 func main() {
-    err := config.ReadConfig()
-    if err != nil {
-    	panic(err.Error())
-	}
 
-	bot.Start()
+	botPrefix := os.Getenv("BOT_PREFIX")
+	botToken := os.Getenv("BOT_TOKEN")
+	sqlUser := os.Getenv("SQL_USER")
+	sqlPass := os.Getenv("SQL_PASS")
+	sqlHost := os.Getenv("SQL_HOST")
+	sqlPort := os.Getenv("SQL_PORT")
+	sqlDatabase := os.Getenv("SQL_DATABASE")
 
-    <-make(chan struct{})
-    return
+	bot.Start(botPrefix, botToken, sqlUser, sqlPass, sqlHost, sqlPort, sqlDatabase)
+
+	<-make(chan struct{})
+	return
 }
-
