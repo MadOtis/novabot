@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
+	strip "github.com/grokify/html-strip-tags-go"
 
 	// needed for the database/sql package
 	_ "github.com/go-sql-driver/mysql"
@@ -68,8 +69,20 @@ func messageHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 
 		if strings.HasPrefix(command, "bio") {
-			resultString := "Fucker, I told you this isn't implemented yet!"
-			_, _ = s.ChannelMessageSend(m.ChannelID, resultString)
+			userSpecified := strings.TrimSpace(strings.TrimPrefix(command, "bio"))
+			if len(userSpecified) > 0 {
+				if strings.HasPrefix(userSpecified, userMarker) {
+					userSpecified = strings.TrimSuffix(strings.TrimPrefix(userSpecified, userMarker), ">")
+					discordUser, err := s.User(userSpecified)
+					if err != nil {
+						panic("User unknown")
+					}
+					userSpecified = discordUser.Username
+				}
+			} else {
+				userSpecified = m.Author.Username
+			}
+			sendUserBio(userSpecified, m, s)
 		}
 
 		if strings.HasPrefix(command, "ships") {
@@ -129,4 +142,29 @@ func buildShipList(userSpecified string) string {
 		resultMessage = "No ships for you!"
 	}
 	return resultMessage
+}
+
+func sendUserBio(userSpecified string, m *discordgo.MessageCreate, s *discordgo.Session) {
+	dbrows, err := DB.Query("select u.handle, u.shortBio, u.img, r.name as rank, p.name as position from users u, rank r, positions p where u.rank = r.rankid and u.position = p.positionid and u.handle = ?", userSpecified)
+	if err != nil {
+		panic(err.Error)
+	}
+	defer dbrows.Close()
+
+	for dbrows.Next() {
+		var handle, shortBio, img, rank, position string
+		err := dbrows.Scan(&handle, &shortBio, &img, &rank, &position)
+		if err != nil {
+			panic(err.Error())
+		}
+
+		var imgURL string
+		if len(img) == 0 {
+			imgURL = "https://i.imgur.com/GhsS0cq.jpg"
+		} else {
+			imgURL = "http://www.novabl4ck.org" + img
+		}
+		resultMessage := NewEmbed().SetTitle(handle).SetDescription(strip.StripTags(shortBio)).SetColor(0xBA55D3).SetAuthor(m.Author.Username).SetImage(imgURL).AddField("Rank", rank).AddField("Position", position).MessageEmbed
+		_, _ = s.ChannelMessageSendEmbed(m.ChannelID, resultMessage)
+	}
 }
