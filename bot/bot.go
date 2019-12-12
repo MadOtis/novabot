@@ -103,6 +103,14 @@ func messageHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 			resultMessage := buildShipList(userSpecified)
 			_, _ = s.ChannelMessageSend(m.ChannelID, resultMessage)
 		}
+
+		if strings.HasPrefix(command, "ship") {
+			shipSpecified := strings.TrimSpace(strings.TrimPrefix(command, "ship"))
+			if len(shipSpecified) == 0 {
+				_, _ = s.ChannelMessageSend(m.ChannelID, "No ship specified")
+			}
+			sendShipInfo(shipSpecified, m, s)
+		}
 	}
 }
 
@@ -112,8 +120,9 @@ func buildHelpMessage() string {
 	resultString = resultString + "!help - this content, duh!\n"
 	resultString = resultString + "  NOTE: All commands accept an optional [handle] argument - if specified, I will return the requested\n"
 	resultString = resultString + "  info for that user, if I can find that user, so make sure his or her handle is correct\n\n"
-	resultString = resultString + "!ships [handle]\n"
-	resultString = resultString + "!bio [handle] - not implemented, yet... stay tuned!\n"
+	resultString = resultString + "!ships [handle] - displays a list of ships you or the specified player owns\n"
+	resultString = resultString + "!ship [shipname] - displays information about a specified ship\n"
+	resultString = resultString + "!bio [handle] - displays a player's BIO in the organization\n"
 	return resultString
 }
 
@@ -142,6 +151,25 @@ func buildShipList(userSpecified string) string {
 		resultMessage = "No ships for you!"
 	}
 	return resultMessage
+}
+
+func sendShipInfo(shipSpecified string, m *discordgo.MessageCreate, s *discordgo.Session) {
+	queryString := `select s.img, s.name, s.manufacturer, s.nickname, s.crewsize, count(o.shipid) orgqty from ships s, ownedShips o where s.id = o.shipid and s.name = "` + shipSpecified + `"`
+	dbrows, err := DB.Query(queryString)
+	if err != nil {
+		panic(err.Error())
+	}
+	defer dbrows.Close()
+
+	for dbrows.Next() {
+		var img, name, manufacturer, nickname, crewsize, qtyInOrg string
+		err := dbrows.Scan(&img, &name, &manufacturer, &nickname, &crewsize, &qtyInOrg)
+		if err != nil {
+			panic(err.Error())
+		}
+		resultMessage := NewEmbed().SetTitle(name).SetDescription(manufacturer+" "+name).SetColor(0xBA55D3).SetAuthor(m.Author.Username).SetImage("http://www.novabl4ck.org"+img).AddField("Crew Size", crewsize).AddField("Nickname", nickname).AddField("Qty in the Org", qtyInOrg).MessageEmbed
+		_, _ = s.ChannelMessageSendEmbed(m.ChannelID, resultMessage)
+	}
 }
 
 func sendUserBio(userSpecified string, m *discordgo.MessageCreate, s *discordgo.Session) {
