@@ -3,6 +3,7 @@ package bot
 import (
 	"database/sql"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -83,6 +84,7 @@ func messageHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 				userSpecified = m.Author.Username
 			}
 			sendUserBio(userSpecified, m, s)
+			return
 		}
 
 		if strings.HasPrefix(command, "ships") {
@@ -102,14 +104,24 @@ func messageHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 			resultMessage := buildShipList(userSpecified)
 			_, _ = s.ChannelMessageSend(m.ChannelID, resultMessage)
+			return
 		}
 
 		if strings.HasPrefix(command, "ship") {
 			shipSpecified := strings.TrimSpace(strings.TrimPrefix(command, "ship"))
-			if len(shipSpecified) == 0 {
-				_, _ = s.ChannelMessageSend(m.ChannelID, "No ship specified")
+			parsedFields := strings.Fields(shipSpecified)
+			if len(parsedFields) == 0 {
+				sendShipManufacturers(m, s)
+			} else if len(parsedFields) == 1 {
+				if _, err := strconv.Atoi(parsedFields[0]); err == nil {
+					sendShipInfoByID(m, s, parsedFields[0])
+				} else {
+					sendShipsForManufacturer(m, s, parsedFields[0])
+				}
+			} else if len(parsedFields) >= 2 {
+				sendShipInfo(m, s, parsedFields)
 			}
-			sendShipInfo(shipSpecified, m, s)
+			return
 		}
 	}
 }
@@ -121,7 +133,7 @@ func buildHelpMessage() string {
 	resultString = resultString + "  NOTE: All commands accept an optional [handle] argument - if specified, I will return the requested\n"
 	resultString = resultString + "  info for that user, if I can find that user, so make sure his or her handle is correct\n\n"
 	resultString = resultString + "!ships [handle] - displays a list of ships you or the specified player owns\n"
-	resultString = resultString + "!ship [shipname] - displays information about a specified ship\n"
+	resultString = resultString + "!ship [manufacturer] [name] - displays information about a specified ship\n"
 	resultString = resultString + "!bio [handle] - displays a player's BIO in the organization\n"
 	return resultString
 }
@@ -153,8 +165,93 @@ func buildShipList(userSpecified string) string {
 	return resultMessage
 }
 
-func sendShipInfo(shipSpecified string, m *discordgo.MessageCreate, s *discordgo.Session) {
-	queryString := `select s.img, s.name, s.manufacturer, s.nickname, s.crewsize, count(o.shipid) orgqty from ships s, ownedShips o where s.id = o.shipid and s.name = "` + shipSpecified + `"`
+func sendShipManufacturers(m *discordgo.MessageCreate, s *discordgo.Session) {
+	queryString := `select distinct(manufacturer) from ships where active = 1;`
+	dbrows, err := DB.Query(queryString)
+	if err != nil {
+		panic(err.Error())
+	}
+	defer dbrows.Close()
+
+	var resultMessage string
+	resultMessage = "Ship Manufacturers\n==================\n"
+	for dbrows.Next() {
+		var manuName string
+		err := dbrows.Scan(&manuName)
+		if err != nil {
+			panic(err.Error())
+		}
+		resultMessage = resultMessage + manuName + "\n"
+	}
+	_, _ = s.ChannelMessageSend(m.ChannelID, resultMessage)
+	return
+}
+
+func sendShipsForManufacturer(m *discordgo.MessageCreate, s *discordgo.Session, manufacturer string) {
+	queryString := `select id, name from ships where manufacturer = "` + manufacturer + `" and active = 1;`
+	dbrows, err := DB.Query(queryString)
+	if err != nil {
+		panic(err.Error())
+	}
+	defer dbrows.Close()
+
+	var resultMessage = "Ships for " + manufacturer + "\n"
+	resultMessage = resultMessage + strings.Repeat("=", len(resultMessage)) + "\n"
+	for dbrows.Next() {
+		var id, shipName string
+		err := dbrows.Scan(&id, &shipName)
+		if err != nil {
+			panic(err.Error())
+		}
+		resultMessage = resultMessage + "(#" + id + " )" + shipName + "\n"
+	}
+	_, _ = s.ChannelMessageSend(m.ChannelID, resultMessage)
+	return
+}
+
+func sendShipInfoByID(m *discordgo.MessageCreate, s *discordgo.Session, shipStr string) {
+	shipID, err := strconv.Atoi(shipStr)
+	if err != nil {
+		panic(err.Error())
+	}
+	dbrows, err := DB.Query(`select id, img, name, manufacturer, nickname, crewsize, count(t2.key) qtyInOrg from ships left join (ownedShips t2) on (id = shipid) where active = 1 and shipId = ?`, shipID)
+	if err != nil {
+		panic(err.Error())
+	}
+	defer dbrows.Close()
+
+	for dbrows.Next() {
+		var id, img, name, manufacturer, nickname, crewsize, qtyInOrg string
+		err := dbrows.Scan(&id, &img, &name, &manufacturer, &nickname, &crewsize, &qtyInOrg)
+		if err != nil {
+			panic(err.Error())
+		}
+
+		var imgURL string
+		if len(img) == 0 {
+			imgURL = "https://i.imgur.com/GhsS0cq.jpg"
+		} else {
+			imgURL = "http://www.novabl4ck.org" + img
+		}
+		if len(nickname) == 0 {
+			nickname = name
+		}
+		resultMessage := NewEmbed().SetTitle(name).SetDescription(manufacturer+" "+name).SetColor(0xBA55D3).SetAuthor(m.Author.Username).SetImage(imgURL).AddField("Crew Size", crewsize).AddField("Nickname", nickname).AddField("Qty in the Org", qtyInOrg).MessageEmbed
+		_, err = s.ChannelMessageSendEmbed(m.ChannelID, resultMessage)
+		if err != nil {
+			panic(err.Error())
+		}
+	}
+}
+
+func sendShipInfo(m *discordgo.MessageCreate, s *discordgo.Session, fields []string) {
+	var shipName, manufacturer string
+	manufacturer = fields[0]
+	for x := 1; x < len(fields); x++ {
+		shipName = shipName + " " + fields[x]
+	}
+	shipName = strings.TrimSpace(shipName)
+	queryString := `select id, img, name, manufacturer, nickname, crewsize, count(t2.key) qtyInOrg from ships left join (ownedShips t2) on (id = shipid) where active = 1 and manufacturer = "` + manufacturer + `" and name = "` + shipName + `"`
 	dbrows, err := DB.Query(queryString)
 	if err != nil {
 		panic(err.Error())
@@ -162,13 +259,26 @@ func sendShipInfo(shipSpecified string, m *discordgo.MessageCreate, s *discordgo
 	defer dbrows.Close()
 
 	for dbrows.Next() {
-		var img, name, manufacturer, nickname, crewsize, qtyInOrg string
-		err := dbrows.Scan(&img, &name, &manufacturer, &nickname, &crewsize, &qtyInOrg)
+		var id, img, name, manufacturer, nickname, crewsize, qtyInOrg string
+		err := dbrows.Scan(&id, &img, &name, &manufacturer, &nickname, &crewsize, &qtyInOrg)
 		if err != nil {
 			panic(err.Error())
 		}
-		resultMessage := NewEmbed().SetTitle(name).SetDescription(manufacturer+" "+name).SetColor(0xBA55D3).SetAuthor(m.Author.Username).SetImage("http://www.novabl4ck.org"+img).AddField("Crew Size", crewsize).AddField("Nickname", nickname).AddField("Qty in the Org", qtyInOrg).MessageEmbed
-		_, _ = s.ChannelMessageSendEmbed(m.ChannelID, resultMessage)
+
+		var imgURL string
+		if len(img) == 0 {
+			imgURL = "https://i.imgur.com/GhsS0cq.jpg"
+		} else {
+			imgURL = "http://www.novabl4ck.org" + img
+		}
+		if len(nickname) == 0 {
+			nickname = name
+		}
+		resultMessage := NewEmbed().SetTitle(name).SetDescription(manufacturer+" "+name).SetColor(0xBA55D3).SetAuthor(m.Author.Username).SetImage(imgURL).AddField("Crew Size", crewsize).AddField("Nickname", nickname).AddField("Qty in the Org", qtyInOrg).MessageEmbed
+		_, err = s.ChannelMessageSendEmbed(m.ChannelID, resultMessage)
+		if err != nil {
+			panic(err.Error())
+		}
 	}
 }
 
