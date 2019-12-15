@@ -139,7 +139,7 @@ func buildHelpMessage() string {
 }
 
 func buildShipList(userSpecified string) string {
-	dbrows, err := DB.Query("select s.name, s.nickname, s.crewsize from ships s, ownedShips os, users u where s.id = os.shipid and os.userid = u.userid and u.handle = ?", userSpecified)
+	dbrows, err := DB.Query("select s.manufacturer, s.name, s.crewsize from ships s, ownedShips os, users u where os.status = 1 and s.id = os.shipid and os.userid = u.userid and u.handle = ?", userSpecified)
 	if err != nil {
 		panic(err.Error())
 	}
@@ -148,7 +148,7 @@ func buildShipList(userSpecified string) string {
 	var resultMessage string
 	var bFoundShips = false
 
-	resultMessage = "Ship | Nickname | Crew size\n"
+	resultMessage = "Manufacturer | Ship Name | Crew size\n"
 
 	for dbrows.Next() {
 		var shipname, shipnickname, crewsize string
@@ -214,7 +214,7 @@ func sendShipInfoByID(m *discordgo.MessageCreate, s *discordgo.Session, shipStr 
 	if err != nil {
 		panic(err.Error())
 	}
-	dbrows, err := DB.Query(`select id, img, name, manufacturer, nickname, crewsize, count(t2.key) qtyInOrg from ships left join (ownedShips t2) on (id = shipid) where active = 1 and shipId = ?`, shipID)
+	dbrows, err := DB.Query(`select id, img, name, manufacturer, nickname, crewsize, count(t2.key) qtyInOrg from ships left join (ownedShips t2) on (id = shipid) where t2.status = 1 and active = 1 and shipId = ?`, shipID)
 	if err != nil {
 		panic(err.Error())
 	}
@@ -228,6 +228,7 @@ func sendShipInfoByID(m *discordgo.MessageCreate, s *discordgo.Session, shipStr 
 		}
 
 		var imgURL string
+
 		if len(img) == 0 {
 			imgURL = "https://i.imgur.com/GhsS0cq.jpg"
 		} else {
@@ -236,10 +237,37 @@ func sendShipInfoByID(m *discordgo.MessageCreate, s *discordgo.Session, shipStr 
 		if len(nickname) == 0 {
 			nickname = name
 		}
-		resultMessage := NewEmbed().SetTitle(name).SetDescription(manufacturer+" "+name).SetColor(0xBA55D3).SetAuthor(m.Author.Username).SetImage(imgURL).AddField("Crew Size", crewsize).AddField("Nickname", nickname).AddField("Qty in the Org", qtyInOrg).MessageEmbed
-		_, err = s.ChannelMessageSendEmbed(m.ChannelID, resultMessage)
-		if err != nil {
-			panic(err.Error())
+		q, _ := strconv.Atoi(qtyInOrg)
+		if q > 0 {
+
+			usrhandles, err := DB.Query(`select u.handle from ownedShips o inner join (users u) on (u.userid = o.userid) where o.status = 1 and o.shipid = ?`, shipID)
+			if err != nil {
+				panic(err.Error())
+			}
+			defer usrhandles.Close()
+
+			var users []string
+			for usrhandles.Next() {
+				var userhandle string
+				err := usrhandles.Scan(&userhandle)
+				if err != nil {
+					panic(err.Error())
+				}
+				users = append(users, userhandle)
+			}
+
+			members := strings.Join(users, "\n")
+			resultMessage := NewEmbed().SetTitle(name).SetDescription(manufacturer+" "+name).SetColor(0xBA55D3).SetAuthor(m.Author.Username).SetImage(imgURL).AddField("Crew Size", crewsize).AddField("Nickname", nickname).AddField("Qty in the Org", qtyInOrg).AddField("Members who own one:", members).MessageEmbed
+			_, err = s.ChannelMessageSendEmbed(m.ChannelID, resultMessage)
+			if err != nil {
+				panic(err.Error())
+			}
+		} else {
+			resultMessage := NewEmbed().SetTitle(name).SetDescription(manufacturer+" "+name).SetColor(0xBA55D3).SetAuthor(m.Author.Username).SetImage(imgURL).AddField("Crew Size", crewsize).AddField("Nickname", nickname).AddField("Qty in the Org", qtyInOrg).MessageEmbed
+			_, err = s.ChannelMessageSendEmbed(m.ChannelID, resultMessage)
+			if err != nil {
+				panic(err.Error())
+			}
 		}
 	}
 }
@@ -274,10 +302,37 @@ func sendShipInfo(m *discordgo.MessageCreate, s *discordgo.Session, fields []str
 		if len(nickname) == 0 {
 			nickname = name
 		}
-		resultMessage := NewEmbed().SetTitle(name).SetDescription(manufacturer+" "+name).SetColor(0xBA55D3).SetAuthor(m.Author.Username).SetImage(imgURL).AddField("Crew Size", crewsize).AddField("Nickname", nickname).AddField("Qty in the Org", qtyInOrg).MessageEmbed
-		_, err = s.ChannelMessageSendEmbed(m.ChannelID, resultMessage)
-		if err != nil {
-			panic(err.Error())
+		q, _ := strconv.Atoi(qtyInOrg)
+		if q > 0 {
+			shipID, _ := strconv.Atoi(id)
+			usrhandles, err := DB.Query(`select u.handle from ownedShips o inner join (users u) on (u.userid = o.userid) where o.shipid = ?`, shipID)
+			if err != nil {
+				panic(err.Error())
+			}
+			defer usrhandles.Close()
+
+			var users []string
+			for usrhandles.Next() {
+				var userhandle string
+				err := usrhandles.Scan(&userhandle)
+				if err != nil {
+					panic(err.Error())
+				}
+				users = append(users, userhandle)
+			}
+
+			members := strings.Join(users, "\n")
+			resultMessage := NewEmbed().SetTitle(name).SetDescription(manufacturer+" "+name).SetColor(0xBA55D3).SetAuthor(m.Author.Username).SetImage(imgURL).AddField("Crew Size", crewsize).AddField("Nickname", nickname).AddField("Qty in the Org", qtyInOrg).AddField("Members who own one:", members).MessageEmbed
+			_, err = s.ChannelMessageSendEmbed(m.ChannelID, resultMessage)
+			if err != nil {
+				panic(err.Error())
+			}
+		} else {
+			resultMessage := NewEmbed().SetTitle(name).SetDescription(manufacturer+" "+name).SetColor(0xBA55D3).SetAuthor(m.Author.Username).SetImage(imgURL).AddField("Crew Size", crewsize).AddField("Nickname", nickname).AddField("Qty in the Org", qtyInOrg).MessageEmbed
+			_, err = s.ChannelMessageSendEmbed(m.ChannelID, resultMessage)
+			if err != nil {
+				panic(err.Error())
+			}
 		}
 	}
 }
