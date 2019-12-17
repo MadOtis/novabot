@@ -23,6 +23,13 @@ var DB *sql.DB
 
 var botPrefix string
 
+// Rank structure for rank array
+type Rank struct {
+	RankID   int
+	Name     string
+	Sequence int
+}
+
 // Start the bot running
 func Start(prefix string, botToken string, sqlUser string, sqlPass string, sqlHost string, sqlPort string, sqlDatabase string) {
 	botPrefix = prefix
@@ -122,6 +129,11 @@ func messageHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 				sendShipInfo(m, s, parsedFields)
 			}
 			return
+		}
+
+		if strings.HasPrefix(command, "shitlist") {
+			userSpecified := strings.TrimSpace(strings.TrimPrefix(command, "shitlist"))
+			shitlist(userSpecified, m, s)
 		}
 	}
 }
@@ -240,7 +252,7 @@ func sendShipInfoByID(m *discordgo.MessageCreate, s *discordgo.Session, shipStr 
 		q, _ := strconv.Atoi(qtyInOrg)
 		if q > 0 {
 
-			usrhandles, err := DB.Query(`select u.handle from ownedShips o inner join (users u) on (u.userid = o.userid) where o.status = 1 and o.shipid = ?`, shipID)
+			usrhandles, err := DB.Query(`select u.handle from ownedShips o inner join (users u) on (u.userid = o.userid) where u.status = 1 and o.status = 1 and o.shipid = ?`, shipID)
 			if err != nil {
 				panic(err.Error())
 			}
@@ -360,4 +372,100 @@ func sendUserBio(userSpecified string, m *discordgo.MessageCreate, s *discordgo.
 		resultMessage := NewEmbed().SetTitle(handle).SetDescription(strip.StripTags(shortBio)).SetColor(0xBA55D3).SetAuthor(m.Author.Username).SetImage(imgURL).AddField("Rank", rank).AddField("Position", position).MessageEmbed
 		_, _ = s.ChannelMessageSendEmbed(m.ChannelID, resultMessage)
 	}
+}
+
+func shitlist(shitlistedUser string, m *discordgo.MessageCreate, s *discordgo.Session) {
+
+	//myRolename := getUserDiscordRole(m, s)
+	var myRolename string
+	myRolename = "Captain"
+
+	var maxLevel int
+
+	ranks := getOrgRanks()
+	for _, oRank := range ranks {
+		if oRank.Name == myRolename {
+			maxLevel = oRank.Sequence
+		}
+	}
+
+	dbrows, err := DB.Query("select rank, handle from users where status = 1 and handle = ?", shitlistedUser)
+	if err != nil {
+		panic(err.Error())
+	}
+	defer dbrows.Close()
+
+	for dbrows.Next() {
+		var hisranks, hishandle string
+		err := dbrows.Scan(&hisranks, &hishandle)
+		if err != nil {
+			panic(err.Error())
+		}
+		hisrankID, _ := strconv.Atoi(hisranks)
+		hisSequence := getRankSequence(hisrankID)
+		if maxLevel < hisSequence {
+			// he can be shitlisted
+			fmt.Printf("%s can be shitlisted!", hishandle)
+		} else {
+			fmt.Printf("%s's rank is too high for you to shitlist him; max level you can shitlist is %d", hishandle, maxLevel)
+		}
+	}
+}
+
+func getUserDiscordRole(m *discordgo.MessageCreate, s *discordgo.Session) string {
+	var myRoleName string
+
+	guild, err := s.State.Guild(m.GuildID)
+	guildRoles := guild.Roles
+	if err != nil {
+		panic(err.Error())
+	}
+	myroles := m.Member.Roles
+	for _, gRole := range guildRoles {
+		if gRole.Name != "@everyone" {
+			for _, myRole := range myroles {
+				if myRole == gRole.ID {
+					myRoleName = gRole.Name
+				}
+			}
+		}
+	}
+	return myRoleName
+}
+
+func getRankSequence(rankID int) int {
+	ranks := getOrgRanks()
+
+	for _, rank := range ranks {
+		if rank.RankID == rankID {
+			return rank.Sequence
+		}
+	}
+	return 1000
+}
+
+func getOrgRanks() []Rank {
+
+	var ranks []Rank
+
+	dbrows, err := DB.Query("Select rankid, name, sequence from rank where status = 1 order by sequence asc;")
+	if err != nil {
+		panic(err.Error())
+	}
+	defer dbrows.Close()
+
+	for dbrows.Next() {
+		var srankid, name, ssequence string
+		err := dbrows.Scan(&srankid, &name, &ssequence)
+		if err != nil {
+			panic(err.Error())
+		}
+
+		rankID, _ := strconv.Atoi(srankid)
+		sequence, _ := strconv.Atoi(ssequence)
+		rank := Rank{RankID: rankID, Name: name, Sequence: sequence}
+		ranks = append(ranks, rank)
+	}
+
+	return ranks
 }
