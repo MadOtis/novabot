@@ -3,11 +3,14 @@ package bot
 import (
 	"database/sql"
 	"fmt"
+	"math/rand"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 	strip "github.com/grokify/html-strip-tags-go"
+	"github.com/madotis/novabot/bot/timestamp"
 
 	// needed for the database/sql package
 	_ "github.com/go-sql-driver/mysql"
@@ -21,6 +24,8 @@ var goBot *discordgo.Session
 // DB is a global database pool object
 var DB *sql.DB
 
+var globalSession *discordgo.Session
+var globalGuildID string
 var botPrefix string
 
 // Rank structure for rank array
@@ -65,6 +70,13 @@ func Start(prefix string, botToken string, sqlUser string, sqlPass string, sqlHo
 }
 
 func messageHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
+	if globalSession == nil {
+		globalSession = s
+	}
+	if len(globalGuildID) == 0 {
+		globalGuildID = m.GuildID
+	}
+
 	if strings.HasPrefix(m.Content, botPrefix) {
 		command := strings.TrimPrefix(m.Content, botPrefix)
 		if m.Author.ID == botID {
@@ -109,8 +121,7 @@ func messageHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 				userSpecified = m.Author.Username
 			}
 
-			resultMessage := buildShipList(userSpecified)
-			_, _ = s.ChannelMessageSend(m.ChannelID, resultMessage)
+			buildShipList(userSpecified, m, s)
 			return
 		}
 
@@ -150,17 +161,15 @@ func buildHelpMessage() string {
 	return resultString
 }
 
-func buildShipList(userSpecified string) string {
+func buildShipList(userSpecified string, m *discordgo.MessageCreate, s *discordgo.Session) {
 	dbrows, err := DB.Query("select s.manufacturer, s.name, s.crewsize from ships s, ownedShips os, users u where os.status = 1 and s.id = os.shipid and os.userid = u.userid and u.handle = ?", userSpecified)
 	if err != nil {
 		panic(err.Error())
 	}
 	defer dbrows.Close()
 
-	var resultMessage string
+	var manufacturerlist, shipnamelist, crewsizelist string
 	var bFoundShips = false
-
-	resultMessage = "Manufacturer | Ship Name | Crew size\n"
 
 	for dbrows.Next() {
 		var shipname, shipnickname, crewsize string
@@ -168,13 +177,18 @@ func buildShipList(userSpecified string) string {
 		if err != nil {
 			panic(err.Error())
 		}
-		resultMessage = resultMessage + shipname + "\t" + shipnickname + "\t" + crewsize + "\n"
+		manufacturerlist = manufacturerlist + shipname + "\n"
+		shipnamelist = shipnamelist + shipnickname + "\n"
+		crewsizelist = crewsizelist + crewsize + "\n"
 		bFoundShips = true
 	}
 	if !bFoundShips {
-		resultMessage = "No ships for you!"
+		_, _ = s.ChannelMessageSend(m.ChannelID, "No ships for you!")
+	} else {
+		title := fmt.Sprintf("%s's Ships", userSpecified)
+		resultMessage := NewEmbed().SetTitle(title).SetDescription("Current Inventory").SetColor(0xBA55D3).SetAuthor(m.Author.Username).AddField("Manufacturer", manufacturerlist).AddField("Ship Name", shipnamelist).AddField("Crew Size", crewsizelist).MessageEmbed
+		_, _ = s.ChannelMessageSendEmbed(m.ChannelID, resultMessage)
 	}
-	return resultMessage
 }
 
 func sendShipManufacturers(m *discordgo.MessageCreate, s *discordgo.Session) {
@@ -349,6 +363,63 @@ func sendShipInfo(m *discordgo.MessageCreate, s *discordgo.Session, fields []str
 	}
 }
 
+// Cleanup performs scheduled cleanup tasks, such as purging expired shitlist users
+func Cleanup() {
+	fmt.Println("Cleaning up...")
+
+	dbrows, err := DB.Query("delete from shitlist where expiration < ?", timestamp.FromNow{}.String())
+	if err != nil {
+		panic(err.Error())
+	}
+	defer dbrows.Close()
+
+	//grief the user, if randomly selected
+	griefShitlistUsers()
+
+}
+
+func griefShitlistUsers() {
+	random := rand.Intn(100)
+	if random < 25 {
+		dbrows, err := DB.Query("select grief from grieftable order by RAND() limit 1")
+		if err != nil {
+			panic(err.Error())
+		}
+		defer dbrows.Close()
+		for dbrows.Next() {
+			var grief string
+			err := dbrows.Scan(&grief)
+			if err != nil {
+				panic(err.Error())
+			}
+			userrows, err := DB.Query("select name from shitlist")
+			if err != nil {
+				panic(err.Error())
+			}
+			defer userrows.Close()
+			for userrows.Next() {
+				var userhandle string
+				err := userrows.Scan(&userhandle)
+				if err != nil {
+					panic(err.Error())
+				}
+				resultMessage := fmt.Sprintf("Hey %s, %s\n", userhandle, grief)
+				fmt.Println(resultMessage)
+				g, _ := globalSession.State.Guild(globalGuildID)
+				for _, m := range g.Members {
+					if m.User.Username == userhandle {
+						channel, err := globalSession.UserChannelCreate(m.User.ID)
+						if err != nil {
+							panic(err.Error())
+						}
+						_, _ = globalSession.ChannelMessageSend(channel.ID, resultMessage)
+					}
+				}
+			}
+		}
+	}
+}
+
 func sendUserBio(userSpecified string, m *discordgo.MessageCreate, s *discordgo.Session) {
 	dbrows, err := DB.Query("select u.handle, u.shortBio, u.img, r.name as rank, p.name as position from users u, rank r, positions p where u.rank = r.rankid and u.position = p.positionid and u.handle = ?", userSpecified)
 	if err != nil {
@@ -405,9 +476,19 @@ func shitlist(shitlistedUser string, m *discordgo.MessageCreate, s *discordgo.Se
 		hisSequence := getRankSequence(hisrankID)
 		if maxLevel < hisSequence {
 			// he can be shitlisted
-			fmt.Printf("%s can be shitlisted!", hishandle)
+			shittime := timestamp.FromNow{Offset: 30, TimeUnit: time.Minute}
+			dbinsert, err := DB.Query("insert into shitlist values (?, ?, ?, ?)", hishandle, m.Author.Username, shittime.String(), "Unspecified")
+			if err != nil {
+				panic(err.Error())
+			}
+			defer dbinsert.Close()
+
+			resultMessage := fmt.Sprintf("%s has been shitlisted until %v", hishandle, shittime.String())
+			_, _ = s.ChannelMessageSend(m.ChannelID, resultMessage)
+
 		} else {
-			fmt.Printf("%s's rank is too high for you to shitlist him; max level you can shitlist is %d", hishandle, maxLevel)
+			resultMessage := fmt.Sprintf("%s's rank is too high for you to shitlist him; max level you can shitlist is %d", hishandle, maxLevel)
+			_, _ = s.ChannelMessageSend(m.ChannelID, resultMessage)
 		}
 	}
 }

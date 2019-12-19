@@ -3,6 +3,8 @@ package main
 import (
 	"os"
 
+	"github.com/jasonlvhit/gocron"
+
 	"github.com/madotis/novabot/bot"
 )
 
@@ -16,8 +18,10 @@ func main() {
 	sqlPort := os.Getenv("SQL_PORT")
 	sqlDatabase := os.Getenv("SQL_DATABASE")
 
+	gocron.Every(10).Seconds().Do(bot.Cleanup)
+
 	bot.Start(botPrefix, botToken, sqlUser, sqlPass, sqlHost, sqlPort, sqlDatabase)
 
-	<-make(chan struct{})
-	return
+	<-gocron.Start()
+
 }
