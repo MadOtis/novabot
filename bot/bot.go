@@ -26,6 +26,7 @@ var DB *sql.DB
 
 var globalSession *discordgo.Session
 var globalGuildID string
+var globalBotChannelID string
 var botPrefix string
 
 // Rank structure for rank array
@@ -36,7 +37,7 @@ type Rank struct {
 }
 
 // Start the bot running
-func Start(prefix string, botToken string, sqlUser string, sqlPass string, sqlHost string, sqlPort string, sqlDatabase string) {
+func Start(prefix string, botToken string, botChannel string, sqlUser string, sqlPass string, sqlHost string, sqlPort string, sqlDatabase string) {
 	botPrefix = prefix
 	goBot, err := discordgo.New("Bot " + botToken)
 	if err != nil {
@@ -58,6 +59,8 @@ func Start(prefix string, botToken string, sqlUser string, sqlPass string, sqlHo
 		fmt.Println(err.Error())
 		return
 	}
+
+	globalBotChannelID = botChannel
 
 	fmt.Println("Connecting to database...")
 	sqlConnectString := sqlUser + ":" + sqlPass + "@tcp(" + sqlHost + ":" + sqlPort + ")/" + sqlDatabase + "?charset=utf8&parseTime=true"
@@ -187,7 +190,7 @@ func buildShipList(userSpecified string, m *discordgo.MessageCreate, s *discordg
 	} else {
 		title := fmt.Sprintf("%s's Ships", userSpecified)
 		resultMessage := NewEmbed().SetTitle(title).SetDescription("Current Inventory").SetColor(0xBA55D3).SetAuthor(m.Author.Username).AddField("Manufacturer", manufacturerlist).AddField("Ship Name", shipnamelist).AddField("Crew Size", crewsizelist).MessageEmbed
-		_, _ = s.ChannelMessageSendEmbed(m.ChannelID, resultMessage)
+		_, _ = s.ChannelMessageSendEmbed(globalBotChannelID, resultMessage)
 	}
 }
 
@@ -284,13 +287,13 @@ func sendShipInfoByID(m *discordgo.MessageCreate, s *discordgo.Session, shipStr 
 
 			members := strings.Join(users, "\n")
 			resultMessage := NewEmbed().SetTitle(name).SetDescription(manufacturer+" "+name).SetColor(0xBA55D3).SetAuthor(m.Author.Username).SetImage(imgURL).AddField("Crew Size", crewsize).AddField("Nickname", nickname).AddField("Qty in the Org", qtyInOrg).AddField("Members who own one:", members).MessageEmbed
-			_, err = s.ChannelMessageSendEmbed(m.ChannelID, resultMessage)
+			_, err = s.ChannelMessageSendEmbed(globalBotChannelID, resultMessage)
 			if err != nil {
 				panic(err.Error())
 			}
 		} else {
 			resultMessage := NewEmbed().SetTitle(name).SetDescription(manufacturer+" "+name).SetColor(0xBA55D3).SetAuthor(m.Author.Username).SetImage(imgURL).AddField("Crew Size", crewsize).AddField("Nickname", nickname).AddField("Qty in the Org", qtyInOrg).MessageEmbed
-			_, err = s.ChannelMessageSendEmbed(m.ChannelID, resultMessage)
+			_, err = s.ChannelMessageSendEmbed(globalBotChannelID, resultMessage)
 			if err != nil {
 				panic(err.Error())
 			}
@@ -349,13 +352,13 @@ func sendShipInfo(m *discordgo.MessageCreate, s *discordgo.Session, fields []str
 
 			members := strings.Join(users, "\n")
 			resultMessage := NewEmbed().SetTitle(name).SetDescription(manufacturer+" "+name).SetColor(0xBA55D3).SetAuthor(m.Author.Username).SetImage(imgURL).AddField("Crew Size", crewsize).AddField("Nickname", nickname).AddField("Qty in the Org", qtyInOrg).AddField("Members who own one:", members).MessageEmbed
-			_, err = s.ChannelMessageSendEmbed(m.ChannelID, resultMessage)
+			_, err = s.ChannelMessageSendEmbed(globalBotChannelID, resultMessage)
 			if err != nil {
 				panic(err.Error())
 			}
 		} else {
 			resultMessage := NewEmbed().SetTitle(name).SetDescription(manufacturer+" "+name).SetColor(0xBA55D3).SetAuthor(m.Author.Username).SetImage(imgURL).AddField("Crew Size", crewsize).AddField("Nickname", nickname).AddField("Qty in the Org", qtyInOrg).MessageEmbed
-			_, err = s.ChannelMessageSendEmbed(m.ChannelID, resultMessage)
+			_, err = s.ChannelMessageSendEmbed(globalBotChannelID, resultMessage)
 			if err != nil {
 				panic(err.Error())
 			}
@@ -441,15 +444,13 @@ func sendUserBio(userSpecified string, m *discordgo.MessageCreate, s *discordgo.
 			imgURL = "http://www.novabl4ck.org" + img
 		}
 		resultMessage := NewEmbed().SetTitle(handle).SetDescription(strip.StripTags(shortBio)).SetColor(0xBA55D3).SetAuthor(m.Author.Username).SetImage(imgURL).AddField("Rank", rank).AddField("Position", position).MessageEmbed
-		_, _ = s.ChannelMessageSendEmbed(m.ChannelID, resultMessage)
+		_, _ = s.ChannelMessageSendEmbed(globalBotChannelID, resultMessage)
 	}
 }
 
 func shitlist(shitlistedUser string, m *discordgo.MessageCreate, s *discordgo.Session) {
 
-	//myRolename := getUserDiscordRole(m, s)
-	var myRolename string
-	myRolename = "Captain"
+	myRolename := getUserDiscordRole(m, s)
 
 	var maxLevel int
 
