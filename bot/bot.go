@@ -451,6 +451,7 @@ func sendUserBio(userSpecified string, m *discordgo.MessageCreate, s *discordgo.
 func shitlist(shitlistedUser string, m *discordgo.MessageCreate, s *discordgo.Session) {
 
 	myRolename := getUserDiscordRole(m, s)
+	fmt.Println("sender role is: " + myRolename)
 
 	var maxLevel int
 
@@ -460,6 +461,7 @@ func shitlist(shitlistedUser string, m *discordgo.MessageCreate, s *discordgo.Se
 			maxLevel = oRank.Sequence
 		}
 	}
+	fmt.Printf("org rank is %d\n", maxLevel)
 
 	dbrows, err := DB.Query("select rank, handle from users where status = 1 and handle = ?", shitlistedUser)
 	if err != nil {
@@ -475,6 +477,9 @@ func shitlist(shitlistedUser string, m *discordgo.MessageCreate, s *discordgo.Se
 		}
 		hisrankID, _ := strconv.Atoi(hisranks)
 		hisSequence := getRankSequence(hisrankID)
+
+		fmt.Printf("hisSequence is %d\n", hisSequence)
+
 		if maxLevel < hisSequence {
 			// he can be shitlisted
 			shittime := timestamp.FromNow{Offset: 30, TimeUnit: time.Minute}
