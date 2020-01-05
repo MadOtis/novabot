@@ -434,15 +434,15 @@ func griefShitlistUsers() {
 }
 
 func sendUserBio(userSpecified string, m *discordgo.MessageCreate, s *discordgo.Session) {
-	dbrows, err := DB.Query("select u.handle, u.shortBio, u.img, r.name as rank, p.name as position from users u, rank r, positions p where u.rank = r.rankid and u.position = p.positionid and u.handle = ?", userSpecified)
+	dbrows, err := DB.Query("select u.handle, u.shortBio, u.bio, u.img, r.name as rank, p.name as position from users u, rank r, positions p where u.rank = r.rankid and u.position = p.positionid and u.handle = ?", userSpecified)
 	if err != nil {
 		panic(err.Error)
 	}
 	defer dbrows.Close()
 
 	for dbrows.Next() {
-		var handle, shortBio, img, rank, position string
-		err := dbrows.Scan(&handle, &shortBio, &img, &rank, &position)
+		var handle, shortBio, fullBio, img, rank, position string
+		err := dbrows.Scan(&handle, &shortBio, &fullBio, &img, &rank, &position)
 		if err != nil {
 			panic(err.Error())
 		}
@@ -453,7 +453,7 @@ func sendUserBio(userSpecified string, m *discordgo.MessageCreate, s *discordgo.
 		} else {
 			imgURL = "http://www.novabl4ck.org" + img
 		}
-		resultMessage := NewEmbed().SetTitle(handle).SetDescription(strip.StripTags(shortBio)).SetColor(0xBA55D3).SetAuthor(m.Author.Username).SetImage(imgURL).AddField("Rank", rank).AddField("Position", position).MessageEmbed
+		resultMessage := NewEmbed().SetTitle(handle).SetDescription(strip.StripTags(shortBio)).SetColor(0xBA55D3).SetAuthor(m.Author.Username).SetImage(imgURL).AddField("Full Bio", strip.StripTags(fullBio)).AddField("Rank", rank).AddField("Position", position).MessageEmbed
 		_, _ = s.ChannelMessageSendEmbed(globalBotChannelID, resultMessage)
 		_, _ = s.ChannelMessageSend(m.ChannelID, "I've responded to your query in the Novabot channel")
 	}
