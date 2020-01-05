@@ -453,7 +453,7 @@ func sendUserBio(userSpecified string, m *discordgo.MessageCreate, s *discordgo.
 		} else {
 			imgURL = "http://www.novabl4ck.org" + img
 		}
-		resultMessage := NewEmbed().SetTitle(handle).SetDescription(strip.StripTags(shortBio)).SetColor(0xBA55D3).SetAuthor(m.Author.Username).SetImage(imgURL).AddField("Full Bio", strip.StripTags(fullBio)).AddField("Rank", rank).AddField("Position", position).MessageEmbed
+		resultMessage := NewEmbed().SetTitle(handle).SetDescription(strip.StripTags(shortBio)).SetColor(0xBA55D3).SetAuthor(m.Author.Username).SetImage(imgURL).AddFieldNotInline("Full Bio", strip.StripTags(fullBio)).AddField("Rank", rank).AddField("Position", position).MessageEmbed
 		_, _ = s.ChannelMessageSendEmbed(globalBotChannelID, resultMessage)
 		_, _ = s.ChannelMessageSend(m.ChannelID, "I've responded to your query in the Novabot channel")
 	}
