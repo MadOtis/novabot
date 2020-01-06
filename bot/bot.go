@@ -193,7 +193,9 @@ func buildShipList(userSpecified string, m *discordgo.MessageCreate, s *discordg
 		title := fmt.Sprintf("%s's Ships", userSpecified)
 		resultMessage := NewEmbed().SetTitle(title).SetDescription("Current Inventory").SetColor(0xBA55D3).SetAuthor(m.Author.Username).AddField("Manufacturer", manufacturerlist).AddField("Ship Name", shipnamelist).AddField("Crew Size", crewsizelist).MessageEmbed
 		_, _ = s.ChannelMessageSendEmbed(globalBotChannelID, resultMessage)
-		_, _ = s.ChannelMessageSend(m.ChannelID, "I've responded to your query in the Novabot channel")
+		if m.ChannelID != globalBotChannelID {
+			_, _ = s.ChannelMessageSend(m.ChannelID, "I've responded to your query in the Novabot channel")
+		}
 	}
 }
 
@@ -216,7 +218,9 @@ func sendShipManufacturers(m *discordgo.MessageCreate, s *discordgo.Session) {
 		resultMessage = resultMessage + manuName + "\n"
 	}
 	_, _ = s.ChannelMessageSend(globalBotChannelID, resultMessage)
-	_, _ = s.ChannelMessageSend(m.ChannelID, "I've responded to your query in the Novabot channel")
+	if m.ChannelID != globalBotChannelID {
+		_, _ = s.ChannelMessageSend(m.ChannelID, "I've responded to your query in the Novabot channel")
+	}
 	return
 }
 
@@ -239,7 +243,9 @@ func sendShipsForManufacturer(m *discordgo.MessageCreate, s *discordgo.Session, 
 		resultMessage = resultMessage + "(#" + id + " )" + shipName + "\n"
 	}
 	_, _ = s.ChannelMessageSend(globalBotChannelID, resultMessage)
-	_, _ = s.ChannelMessageSend(m.ChannelID, "I've responded to your query in the Novabot channel")
+	if m.ChannelID != globalBotChannelID {
+		_, _ = s.ChannelMessageSend(m.ChannelID, "I've responded to your query in the Novabot channel")
+	}
 	return
 }
 
@@ -296,14 +302,18 @@ func sendShipInfoByID(m *discordgo.MessageCreate, s *discordgo.Session, shipStr 
 			if err != nil {
 				panic(err.Error())
 			}
-			_, _ = s.ChannelMessageSend(m.ChannelID, "I've responded to your query in the Novabot channel")
+			if m.ChannelID != globalBotChannelID {
+				_, _ = s.ChannelMessageSend(m.ChannelID, "I've responded to your query in the Novabot channel")
+			}
 		} else {
 			resultMessage := NewEmbed().SetTitle(name).SetDescription(manufacturer+" "+name).SetColor(0xBA55D3).SetAuthor(m.Author.Username).SetImage(imgURL).AddField("Crew Size", crewsize).AddField("Nickname", nickname).AddField("Qty in the Org", qtyInOrg).MessageEmbed
 			_, err = s.ChannelMessageSendEmbed(globalBotChannelID, resultMessage)
 			if err != nil {
 				panic(err.Error())
 			}
-			_, _ = s.ChannelMessageSend(m.ChannelID, "I've responded to your query in the Novabot channel")
+			if m.ChannelID != globalBotChannelID {
+				_, _ = s.ChannelMessageSend(m.ChannelID, "I've responded to your query in the Novabot channel")
+			}
 		}
 	}
 }
@@ -363,22 +373,24 @@ func sendShipInfo(m *discordgo.MessageCreate, s *discordgo.Session, fields []str
 			if err != nil {
 				panic(err.Error())
 			}
-			_, _ = s.ChannelMessageSend(m.ChannelID, "I've responded to your query in the Novabot channel")
+			if m.ChannelID != globalBotChannelID {
+				_, _ = s.ChannelMessageSend(m.ChannelID, "I've responded to your query in the Novabot channel")
+			}
 		} else {
 			resultMessage := NewEmbed().SetTitle(name).SetDescription(manufacturer+" "+name).SetColor(0xBA55D3).SetAuthor(m.Author.Username).SetImage(imgURL).AddField("Crew Size", crewsize).AddField("Nickname", nickname).AddField("Qty in the Org", qtyInOrg).MessageEmbed
 			_, err = s.ChannelMessageSendEmbed(globalBotChannelID, resultMessage)
 			if err != nil {
 				panic(err.Error())
 			}
-			_, _ = s.ChannelMessageSend(m.ChannelID, "I've responded to your query in the Novabot channel")
+			if m.ChannelID != globalBotChannelID {
+				_, _ = s.ChannelMessageSend(m.ChannelID, "I've responded to your query in the Novabot channel")
+			}
 		}
 	}
 }
 
 // Cleanup performs scheduled cleanup tasks, such as purging expired shitlist users
 func Cleanup() {
-	fmt.Println("Cleaning up...")
-
 	dbrows, err := DB.Query("delete from shitlist where expiration < ?", timestamp.FromNow{}.String())
 	if err != nil {
 		panic(err.Error())
@@ -387,7 +399,6 @@ func Cleanup() {
 
 	//grief the user, if randomly selected
 	griefShitlistUsers()
-
 }
 
 func griefShitlistUsers() {
@@ -453,9 +464,11 @@ func sendUserBio(userSpecified string, m *discordgo.MessageCreate, s *discordgo.
 		} else {
 			imgURL = "http://www.novabl4ck.org" + img
 		}
-		resultMessage := NewEmbed().SetTitle(handle).SetDescription(strip.StripTags(shortBio)).SetColor(0xBA55D3).SetAuthor(m.Author.Username).SetImage(imgURL).AddFieldNotInline("Full Bio", strip.StripTags(fullBio)).AddField("Rank", rank).AddField("Position", position).MessageEmbed
+		resultMessage := NewEmbed().SetTitle(handle).SetDescription(strip.StripTags(shortBio)).SetColor(0xBA55D3).SetAuthor(m.Author.Username).SetImage(imgURL).AddField("Rank", rank).AddField("Position", position).MessageEmbed
 		_, _ = s.ChannelMessageSendEmbed(globalBotChannelID, resultMessage)
-		_, _ = s.ChannelMessageSend(m.ChannelID, "I've responded to your query in the Novabot channel")
+		if m.ChannelID != globalBotChannelID {
+			_, _ = s.ChannelMessageSend(m.ChannelID, "I've responded to your query in the Novabot channel")
+		}
 	}
 }
 
