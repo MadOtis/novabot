@@ -609,8 +609,12 @@ func addInsult(insult string, m *discordgo.MessageCreate, s *discordgo.Session) 
 	fmt.Printf("org rank is %d\n", maxLevel)
 
 	if maxLevel < 40 {
-		DB.Exec("insert into grieftable values (?)", insult)
-		_, _ = s.ChannelMessageSend(m.ChannelID, "inserted new insult")
+		_, err := DB.Exec("insert into grieftable values (?)", insult)
+		if err != nil {
+			panic(err.Error())
+		} else {
+			_, _ = s.ChannelMessageSend(m.ChannelID, "inserted new insult")
+		}
 	} else {
 		_, _ = s.ChannelMessageSend(m.ChannelID, "Sorry, your rank doesn't permit adding new insults.")
 	}
