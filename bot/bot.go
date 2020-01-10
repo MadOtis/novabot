@@ -153,7 +153,7 @@ func messageHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 
 		if strings.HasPrefix(command, "addinsult") {
-			newInsult := string.TrimSpace(strings.TrimPrefix(command, "addinsult"))
+			newInsult := strings.TrimSpace(strings.TrimPrefix(command, "addinsult"))
 			addInsult(newInsult, m, s)
 		}
 	}
