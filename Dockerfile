@@ -17,5 +17,7 @@ ENV "SQL_PASS"="",
 ENV "SQL_HOST"="",
 ENV "SQL_PORT"="",
 ENV "SQL_DATABASE"=""
+ENV "BOT_CHANNEL_ID"=""
+ENV "GENERAL_CHANNEL_ID"=""
 
 CMD ["/novabot"]
