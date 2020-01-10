@@ -151,6 +151,11 @@ func messageHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 			userSpecified := strings.TrimSpace(strings.TrimPrefix(command, "shitlist"))
 			shitlist(userSpecified, m, s)
 		}
+
+		if strings.HasPrefix(command, "addinsult") {
+			newInsult := string.TrimSpace(strings.TrimPrefix(command, "addinsult"))
+			addInsult(newInsult, m, s)
+		}
 	}
 }
 
@@ -163,6 +168,10 @@ func buildHelpMessage() string {
 	resultString = resultString + "!ships [handle] - displays a list of ships you or the specified player owns\n"
 	resultString = resultString + "!ship [manufacturer] [name] - displays information about a specified ship\n"
 	resultString = resultString + "!bio [handle] - displays a player's BIO in the organization\n"
+	resultString = resultString + "!shitlist [handle] - temporarily set someone up for random griefing by the bot\n"
+	resultString = resultString + "  NOTE: Only lasts for 30 minutes\n\n"
+	resultString = resultString + "=== Management commands (admin only)===\n"
+	resultString = resultString + "!addinsult [insult] - adds a new insult to the database\n"
 	return resultString
 }
 
@@ -570,4 +579,26 @@ func getOrgRanks() []Rank {
 	}
 
 	return ranks
+}
+
+func addInsult(insult string, m *discordgo.MessageCreate, s *discordgo.Session) {
+	myRolename := getUserDiscordRole(m, s)
+	fmt.Println("sender role is: " + myRolename)
+
+	var maxLevel int
+
+	ranks := getOrgRanks()
+	for _, oRank := range ranks {
+		if oRank.Name == myRolename {
+			maxLevel = oRank.Sequence
+		}
+	}
+	fmt.Printf("org rank is %d\n", maxLevel)
+
+	if maxLevel < 40 {
+		DB.Exec("insert into grieftable values (?)", insult)
+		_, _ = s.ChannelMessageSend(m.ChannelID, "inserted new insult")
+	} else {
+		_, _ = s.ChannelMessageSend(m.ChannelID, "Sorry, your rank doesn't permit adding new insults.")
+	}
 }
