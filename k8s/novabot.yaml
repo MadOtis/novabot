@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: novabot
+  namespace: novabot
+  labels:
+    app: novabot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: novabot
+  template:
+    metadata:
+      labels:
+        app: novabot
+    spec:
+      containers:
+      - name: novabot
+        image: madotis/novabot:latest
+        env:
+        - name: "BOT_TOKEN"
+          value: ""
+        - name: "BOT_PREFIX"
+          value: "!"
+        - name: "SQL_USER"
+          value: ""
+        - name: "SQL_PASS"
+          value: ""
+        - name: "SQL_HOST"
+          value: ""
+        - name: "SQL_PORT"
+          value: "3306"
+        - name: "SQL_DATABASE"
+          value: ""
+        - name: "BOT_CHANNEL_ID"
+          value: ""
+        - name: "GENERAL_CHANNEL_ID"
+          value: ""
